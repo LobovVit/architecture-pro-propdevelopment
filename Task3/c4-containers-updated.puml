@@ -1,0 +1,77 @@
+@startuml
+' C4 Container diagram (updated) with SmartHome integration
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title PropDevelopment — Контейнеры (TO-BE) с интеграцией «Умный дом»
+
+' People
+Person(owner, "Собственник/Жилец", "Мобильное приложение")
+Person(client, "Клиент", "Витрина продаж/онлайн-сделка/онлайн-тур")
+
+System_Boundary(pd, "PropDevelopment") {
+
+  ' Existing domains (high level)
+  Container(mobile_tenant, "Мобильное приложение собственника", "iOS/Android", "UI для ЖКУ и «Умного дома»")
+  Container(tenant_vitrine, "Витрина сервисов для собственников", "Backend/API", "Фасад домена ЖКУ (единый API для mobile)")
+  Container(tenant_core, "tenant-core-app", "Backend", "Бизнес-логика ЖКУ и профили собственников")
+  ContainerDb(tenant_db, "tenant-core-db", "PostgreSQL", "Данные ЖКУ и собственников (домен ЖКУ)")
+
+  Container(crm_tenant, "CRM собственников", "Backend", "CRM по собственникам/атрибутам")
+  ContainerDb(crm_tenant_db, "crm-tenant-db", "PostgreSQL", "БД CRM собственников")
+
+  Container(auth, "auth-service", "AuthN/AuthZ", "OIDC Provider, выдача/проверка токенов")
+  ContainerDb(auth_db, "auth-db", "PostgreSQL", "Учётные записи/клиенты OAuth/сессии")
+
+  ' NEW: SmartHome integration layer
+  Container(smart_gw, "SmartHome Integration Gateway", "Backend", "Единая точка интеграции с партнёром: команды/события, политика доступа, аудит")
+  ContainerDb(smart_gw_db, "smart-home-db", "PostgreSQL/Timeseries", "Минимально необходимое: маппинг устройств, разрешения, idempotency keys, аудит интеграции")
+  Container(queue, "Event Bus (опционально)", "Kafka/RabbitMQ", "Асинхронные события (входящие webhooks, телеметрия), ретраи, DLQ")
+
+  ' Data domain
+  Container(data_wh, "Хранилище данных", "DWH", "Агрегация данных (с ограничениями по ПДн)")
+  Container(bi, "BI/Отчётность", "BI", "Отчёты по доменам")
+
+  ' Sales domain (as-is, shown compactly)
+  Container(sales_vitrine, "Витрина продаж (client)", "Web/API", "Подбор/бронирование недвижимости")
+}
+
+System_Boundary(partner, "Партнёр «Умный дом»") {
+  Container_Ext(sh_platform, "Платформа партнёра", "SaaS/API", "API управления домофоном/шлагбаумом, события")
+  Container_Ext(intercom, "Интеллектуальный домофон", "Device", "Распознавание лиц + доступ")
+  Container_Ext(barrier, "Интеллектуальный шлагбаум", "Device", "Распознавание номеров + доступ")
+}
+
+' Relations
+Rel(owner, mobile_tenant, "Использует", "HTTPS")
+Rel(mobile_tenant, tenant_vitrine, "API ЖКУ + «Умный дом»", "HTTPS/REST")
+
+Rel(tenant_vitrine, auth, "Login/Token", "OIDC/OAuth2")
+Rel(tenant_vitrine, tenant_core, "Операции ЖКУ/профиль", "HTTPS/REST")
+Rel(tenant_core, tenant_db, "Чтение/запись", "JDBC")
+Rel(tenant_core, crm_tenant, "Синхронизация атрибутов", "HTTPS/REST")
+Rel(crm_tenant, crm_tenant_db, "Чтение/запись", "JDBC")
+
+' NEW: smart home flow
+Rel(tenant_vitrine, smart_gw, "Команды/статусы: домофон/шлагбаум", "HTTPS/REST")
+Rel(smart_gw, smart_gw_db, "Маппинг устройств/разрешения/аудит", "JDBC")
+Rel(smart_gw, sh_platform, "Команды/запрос статуса", "mTLS + OAuth2 (client_credentials)")
+Rel(sh_platform, smart_gw, "События: доступ/ошибки/статус", "mTLS + Signed Webhook")
+
+' Optional async handling
+Rel(smart_gw, queue, "Публикация/обработка событий", "Async")
+Rel(queue, data_wh, "Поставка событий (мин. данные)", "Async/Batch")
+Rel(data_wh, bi, "Отчёты", "SQL/BI")
+
+Rel(sh_platform, intercom, "Управление/телеметрия", "Vendor protocol")
+Rel(sh_platform, barrier, "Управление/телеметрия", "Vendor protocol")
+
+' Notes
+note right of smart_gw
+SmartHome Integration Gateway нужен, чтобы:
+- не пускать mobile напрямую к партнёру
+- обеспечить единые политики доступа и tenant isolation
+- минимизировать передачу ПДн/биометрии/номеров
+- централизовать аудит/логирование/ретраи/лимиты
+end note
+
+@enduml

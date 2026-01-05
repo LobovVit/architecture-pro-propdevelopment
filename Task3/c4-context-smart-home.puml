@@ -1,0 +1,42 @@
+@startuml
+' C4 Context diagram for Smart Home integrations
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title PropDevelopment — Контекст «Умный дом» (Интеллектуальный домофон / шлагбаум)
+
+Person(owner, "Собственник/Жилец", "Пользуется мобильным приложением для ЖКУ и «Умного дома»")
+Person(pm_ops, "Сотрудники УК/Эксплуатации", "Работают с данными собственников и настройками доступа")
+
+System_Boundary(pd, "PropDevelopment") {
+  System(mobile, "Мобильное приложение собственника", "iOS/Android", "Единая точка доступа к услугам ЖКУ и новым функциям «Умного дома»")
+  System(tenant_vitrine, "Витрина сервисов для собственников", "Backend/API", "Фасад/агрегация сервисов домена ЖКУ")
+  System(tenant_core, "tenant-core-app", "Backend", "Сервисы ЖКУ, управление данными и правами собственников")
+  System(crm_tenant, "CRM собственников", "Backend", "Управление данными собственников и их атрибутами")
+  System(auth, "auth-service", "AuthN/AuthZ", "Аутентификация/авторизация, токены")
+  System(smart_gw, "SmartHome Integration Gateway", "Backend", "Безопасная интеграция с внешней платформой «Умного дома» (команды/события)")
+  System_Ext(bi, "BI/Хранилище данных", "Data", "Отчётность и аналитика")
+}
+
+System_Boundary(partner, "Партнёр «Умный дом»") {
+  System_Ext(sh_platform, "Платформа партнёра", "SaaS/Platform", "API управления устройствами и событиями (домофон/шлагбаум)")
+  System_Ext(intercom, "Интеллектуальный домофон", "Device", "Видеодомофон + распознавание лиц")
+  System_Ext(barrier, "Интеллектуальный шлагбаум", "Device", "Контроль въезда + распознавание номеров")
+}
+
+Rel(owner, mobile, "Использует", "HTTPS")
+Rel(mobile, tenant_vitrine, "Получает услуги/управляет", "HTTPS")
+Rel(tenant_vitrine, tenant_core, "Запросы ЖКУ/права доступа", "HTTPS/REST")
+Rel(tenant_core, crm_tenant, "Чтение/запись данных собственников", "HTTPS/REST")
+Rel(tenant_vitrine, auth, "Аутентификация/авторизация", "OIDC/OAuth2")
+Rel(tenant_core, auth, "Проверка токенов/ролей", "OIDC/OAuth2")
+
+Rel(tenant_vitrine, smart_gw, "Команды/статусы «Умного дома»", "HTTPS/REST")
+Rel(smart_gw, sh_platform, "Интеграция с партнёром (команды)", "mTLS + OAuth2 Client Credentials / Token Exchange")
+Rel(sh_platform, smart_gw, "События (webhook) / статусы устройств", "mTLS + Signed Webhook")
+Rel(sh_platform, intercom, "Управление/телеметрия", "Vendor protocol")
+Rel(sh_platform, barrier, "Управление/телеметрия", "Vendor protocol")
+
+Rel(pm_ops, crm_tenant, "Управляет данными/настройками доступа", "Web/HTTPS")
+Rel(smart_gw, bi, "События доступа/телеметрия (обезличенно/минимально)", "Batch/Stream")
+
+@enduml
