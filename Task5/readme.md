@@ -33,7 +33,7 @@
 Все сервисы разворачиваются в одном namespace.
 
 ```bash
-kubectl create ns task5 || true
+kubectl create ns task5
 kubectl config set-context --current --namespace=task5
 
 kubectl run front-end-app --image=nginx --labels role=front-end --expose --port 80
