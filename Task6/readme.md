@@ -248,7 +248,6 @@ ls -la ./Task6
 
 ## Результат
 
-В `Task6/` должно быть **ровно 3 файла**:
 - `analysis.md`
 - `audit-extract.json`
 - `filter_audit.py`

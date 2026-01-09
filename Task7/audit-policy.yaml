@@ -1,0 +1,10 @@
+apiVersion: audit.k8s.io/v1
+kind: Policy
+rules:
+  - level: None
+    nonResourceURLs:
+      - /healthz*
+      - /livez*
+      - /readyz*
+      - /version
+  - level: Metadata
