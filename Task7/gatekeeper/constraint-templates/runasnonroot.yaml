@@ -1,0 +1,59 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredsecuritycontext
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequiredSecurityContext
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredsecuritycontext
+
+        pod_sc := input.review.object.spec.securityContext
+
+        containers[c] {
+          c := input.review.object.spec.containers[_]
+        }
+        containers[c] {
+          c := input.review.object.spec.initContainers[_]
+        }
+
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "Pod"
+          c := containers[_]
+          not run_as_non_root(c)
+          msg := sprintf("runAsNonRoot must be true (container: %v)", [c.name])
+        }
+
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "Pod"
+          c := containers[_]
+          not read_only_root_fs(c)
+          msg := sprintf("readOnlyRootFilesystem must be true (container: %v)", [c.name])
+        }
+
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "Pod"
+          c := containers[_]
+          not allow_priv_escalation_false(c)
+          msg := sprintf("allowPrivilegeEscalation must be false (container: %v)", [c.name])
+        }
+
+        run_as_non_root(c) {
+          c.securityContext.runAsNonRoot == true
+        }
+        run_as_non_root(c) {
+          not c.securityContext.runAsNonRoot
+          pod_sc.runAsNonRoot == true
+        }
+
+        read_only_root_fs(c) {
+          c.securityContext.readOnlyRootFilesystem == true
+        }
+
+        allow_priv_escalation_false(c) {
+          c.securityContext.allowPrivilegeEscalation == false
+        }
